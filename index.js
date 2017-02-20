@@ -11,14 +11,14 @@ const http = require('http');
 const app = express();
 
 const sessionParams = {
-    resave: true,
+    resave: false,
     rolling: false,
     name: "dupa",
     saveUninitialized: true,
     secret: "dupaaaa",
     unset: "keep",
     cookie: {
-        maxAge: false,
+        maxAge: 60000,
         //originalMaxAge: 1800000,
         httpOnly: true
     }

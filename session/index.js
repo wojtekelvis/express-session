@@ -73,17 +73,48 @@ function session(options) {
         req.sessionStore = store;
     
         const cookieId = req.sessionID = helpers.getCookie(req, opts.name, opts.secret);
+    
+        const _end = res.end;
+        res.end = function end(chunk, encoding) {
+            
+        };
         
+        /* missing session ID from browser req */
         if (!req.sessionID) {
             store.generateSession(req, opts);
             helpers.setCookie(res, req.sessionID, opts);
     
             originalId = req.sessionID;
             originalHash = helpers.hash(req.session);
+            //  proxy save and reload
+            
+            return next();
+        } else {
+            return store.get(req.sessionID, function getSession (err, sess) {
+                if (err) {
+                    if (err.code !== 'ENOENT') {
+                        return next(err);
+                    }
+        
+                    generate();
+                } else if (!sess) {
+                    generate();
+                } else {
+                    store.createSession(req, sess);
+                    originalId = req.sessionID;
+                    originalHash = helpers.hash(sess);
+    
+                    if (!resaveSession) {
+                        savedHash = originalHash
+                    }
+    
+                    wrapmethods(req.session);
+                }
+                
+                next();
+            });
         }
-        
-        
-    }
+    };
 }
 
 const helpers = {

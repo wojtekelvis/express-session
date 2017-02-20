@@ -22,6 +22,10 @@ Store.prototype.generateSession = (req, options, data) => {
         ? Date.now() + options.expire
         : options.expire;
     
+    this.loadSession(req, data);
+};
+
+Store.prototype.loadSession = (req, data) => {
     req.session = {
         id: req.sessionID,
         req
@@ -34,20 +38,6 @@ Store.prototype.generateSession = (req, options, data) => {
             }
         }
     }
-};
-
-Store.prototype.createSession = (req, sess) => {
-    const expires = sess.cookie.expires;
-    const orig = sess.cookie.originalMaxAge;
-    
-    sess.cookie = new Cookie(sess.cookie);
-    
-    if (typeof expires === 'string') {
-        sess.cookie.expires = new Date(expires);
-    }
-    
-    sess.cookie.originalMaxAge = orig;
-    req.session = new Session(req, sess);
     
     return req.session;
 };
