@@ -6,8 +6,6 @@ const EventEmitter = require('events').EventEmitter;
 const uid = require('uid-safe').sync;
 const util = require('util');
 
-const cookie = require('./cookie');
-
 module.exports = Store;
 
 function Store () {
@@ -17,6 +15,7 @@ function Store () {
 util.inherits(Store, EventEmitter);
 
 Store.prototype.generateSession = (req, options, data) => {
+    options = options || {};
     req.sessionID = uid(24);
     req.sessionExpire = (typeof options.expire === 'number')
         ? Date.now() + options.expire
@@ -28,6 +27,7 @@ Store.prototype.generateSession = (req, options, data) => {
 Store.prototype.loadSession = (req, data) => {
     req.session = {
         id: req.sessionID,
+        expires: req.sessionExpire,
         req
     };
     
@@ -42,24 +42,9 @@ Store.prototype.loadSession = (req, data) => {
     return req.session;
 };
 
-Store.prototype.regenerate = (req, fn) => {
+Store.prototype.regenerate = (req, options, fn) => {
     this.destroy(req.sessionID, (err) => {
-        this.generate(req);
+        this.generateSession(req, options);
         fn(err);
-    });
-};
-
-Store.prototype.load = (sid, fn) => {
-    this.get(sid, (err, sess) => {
-        if (err || !sess) {
-            return fn(err || undefined);
-        }
-        
-        const req = {
-            sessionID: sid,
-            sessionStore: this
-        };
-        
-        fn(null, this.createSession(req, sess));
     });
 };
