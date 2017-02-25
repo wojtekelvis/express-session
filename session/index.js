@@ -2,17 +2,12 @@
  * Created by Wojtek on 2017-02-19.
  */
 
-const cookie = require('cookie');
-const signature = require('cookie-signature');
 const merge = require('merge');
-const crc = require('crc').crc32;
 const debug = require('debug')('session');
-
 const MemoryStore = require('./memory');
+const helpers = require('./helpers');
 
-module.exports = session;
-
-function session(options) {
+function session (options) {
     "use strict";
     
     const def = {
@@ -44,10 +39,10 @@ function session(options) {
     
     const storeImplementsTouch = typeof store.touch === 'function';
     let storeReady = true;
-    let touched = false;
-    let originalHash;
-    let originalId;
-    let savedHash;
+    let originalId; /* value of session ID after loaded from store or generated */
+    let originalHash; /* value of crc of session object after loaded from store */
+    let savedHash; /* value of crc of session object after saved or same as originalHash when resave == false */
+    let currentHash;
     
     store
         .on('disconnect', function onDisconnect() {
@@ -58,6 +53,41 @@ function session(options) {
         });
     
     return function session (req, res, next) {
+        /* cookieID -> value of the loaded from session cookie ID */
+        const cookieId = helpers.getCookie(req, opts.name, opts.secret);
+        
+        function generate (sess) {
+            store.generateSession(req, opts, sess);
+            originalId = req.session.id;
+            originalHash = helpers.hash(req.session);
+            
+            return originalId;
+        }
+    
+        function isModified () {
+            return originalId !== req.session.id || originalHash !== currentHash;
+        }
+    
+        function isSaved () {
+            return originalId === req.session.id && savedHash === currentHash;
+        }
+    
+        function shouldSave () {
+            return cookieId !== req.session.id && !opts.saveUninitialized
+                ? isModified()
+                : !isSaved()
+        }
+    
+        function shouldTouch() {
+            return cookieId === req.session.id;
+        }
+    
+        function shouldSetCookie () {
+            return cookieId !== req.session.id
+                ? opts.saveUninitialized || isModified()
+                : opts.rolling;
+        }
+        
         if (req.session) {
             return next();
         }
@@ -67,171 +97,72 @@ function session(options) {
             return next();
         }
     
-        req.sessionStore = store;
+        helpers.setObjProp(req, 'sessionStore', store);
     
-        const cookieId = req.sessionID = helpers.getCookie(req, opts.name, opts.secret);
-    
+        /* BEGIN - PROXY END HANDLER */
         const _end = res.end;
         res.end = function end (chunk, encoding) {
-            function shouldSave () {
-                return !opts.saveUninitialized && cookieId !== req.sessionID
-                    ? isModified(req.session)
-                    : !isSaved(req.session)
-            }
-    
-            function shouldTouch() {
-                return cookieId === req.sessionID && !shouldSave();
-            }
-    
-            function isModified (sess) {
-                return originalId !== sess.id || originalHash !== helpers.hash(sess);
-            }
-    
-            function isSaved (sess) {
-                return originalId === sess.id && savedHash === helpers.hash(sess);
-            }
-    
-            function saveSession (sess) {
-                savedHash = helpers.hash(sess);
-                store.set(this, arguments);
-            }
             
-            if (!req.sessionID && !req.session) {
+            function setResponse (withoutCookie) {
+                if (!withoutCookie && shouldSetCookie()) {
+                    helpers.setCookie(res, req.session.id, opts);
+                }
+                
                 return _end.call(res, chunk, encoding);
             }
             
-            /* check if session should be destroyed */
-            if ((req.sessionID && !req.session) || (!req.sessionID && req.session)) {
-                const id = req.sessionID || req.session.id;
+            /* something really wrong happened */
+            if (!req.session || !req.session.id) {
+                return setResponse(true);
+            }
+            
+            if (typeof req.session.id === 'string') {
+                currentHash = helpers.hash(req.session);
                 
-                return store.destroy(id, function onDestroy (err) {
-                    if (err) {
-                        return next(err);
-                    }
-                    
-                    return _end.call(res, chunk, encoding);
-                });
+                if (shouldSave()) {
+                    return store.set(req.session.id, req.session, function onSave () {
+                        
+                        return setResponse();
+                    });
+                } else if (storeImplementsTouch && shouldTouch()) {
+                    return store.touch(req.session.id, opts.expires, function onTouch () {
+                        
+                        return setResponse();
+                    });
+                }
             }
     
-            if (!touched && storeImplementsTouch) {
-                store.touch(req.session.id, );
-                touched = true;
-            }
-            
-            
-            if (typeof req.sessionID === 'string') {
-                savedHash = helpers.hash(req.session);
-                
-                /* should session be saved */
-                if (shouldSave()) {
-                    
-                } else if (storeImplementsTouch && shouldTouch()) {
-                    
-                }
-                
-                /* should session be touched */
-                
-                
-            }
-            
-            return _end.call(res, chunk, encoding);
+            return setResponse();
         };
+        /* END - PROXY END HANDLER */
         
-        /* missing session ID from browser req */
-        if (!req.sessionID) {
-            store.generateSession(req, opts);
-            originalId = req.sessionID;
-            originalHash = helpers.hash(req.session);
-            
-            helpers.setCookie(res, req.sessionID, opts);
-            
-            return next();
-        } else {
-            return store.get(req.sessionID, function getSession (err, sess) {
+        if (cookieId) {
+            return store.get(cookieId, function getSession (err, sess) {
                 if (err && err.code !== 'ENOENT') {
                     return next(err);
                 }
     
-                if (sess) {
-                    store.loadSession(req, sess);
-                    originalId = req.sessionID;
-                    originalHash = helpers.hash(sess);
+                generate(sess || { id: cookieId });
     
-                    if (!opts.resave) {
-                        savedHash = originalHash
-                    }
-                } else {
-                    /* if there is no session or eny other errors */
-                    store.generateSession(req, opts);
-                    originalId = req.sessionID;
-                    originalHash = helpers.hash(sess);
+                /* avoid saving session on END handler */
+                if (!opts.resave) {
+                    savedHash = originalHash
                 }
                 
                 return next();
             });
         }
+    
+        /* missing session ID from browser req */
+        let sessionID = generate();
+        
+        if (shouldSetCookie()) {
+            /* set cookie here to allow application consume it before END handler */
+            helpers.setCookie(res, sessionID, opts);
+        }
+    
+        return next();
     };
 }
 
-const helpers = {
-    hash: function (sess) {
-        return crc(JSON.stringify(sess, function (key, val) {
-            if (this === sess && key === 'expires') {
-                return;
-            }
-    
-            return val;
-        }));
-    },
-    getCookie: function (req, name, secrets) {
-        const header = req.headers.cookie;
-        let raw;
-        let val;
-        
-        // read from cookie header
-        if (header) {
-            const cookies = cookie.parse(header);
-            
-            raw = cookies[name];
-            
-            if (raw) {
-                if (raw.substr(0, 2) === 's:') {
-                    val = this.unSignCookie(raw.slice(2), secrets);
-                    
-                    if (val === false) {
-                        debug('cookie signature invalid');
-                        val = undefined;
-                    }
-                } else {
-                    debug('cookie unsigned')
-                }
-            }
-        }
-        
-        return val;
-    },
-    
-    setCookie: function (res, val, params) {
-        const signed = 's:' + signature.sign(val, params.secret);
-        const data = cookie.serialize(params.name, signed, params.cookie);
-        
-        debug('set-cookie %s', data);
-        
-        const prev = res.getHeader('set-cookie') || [];
-        const header = Array.isArray(prev)
-            ? prev.concat(data)
-            : [prev, data];
-        
-        res.setHeader('set-cookie', header);
-    },
-    
-    unSignCookie: function (val, secret) {
-        const result = signature.unsign(val, secret);
-        if (!result) {
-            return false;
-            
-        }
-    
-        return result;
-    }
-};
+module.exports = session;

@@ -4,47 +4,45 @@
 
 const EventEmitter = require('events').EventEmitter;
 const uid = require('uid-safe').sync;
-const util = require('util');
+const helpers = require('./helpers');
 
-module.exports = Store;
-
-function Store () {
-    EventEmitter.call(this);
+function setExpires (expires) {
+    "use strict";
+    return (typeof expires === 'number')
+        ? Date.now() + expires
+        : expires;
 }
 
-util.inherits(Store, EventEmitter);
-
-Store.prototype.generateSession = (req, options, data) => {
-    options = options || {};
-    req.sessionID = uid(24);
-    req.sessionExpire = (typeof options.expire === 'number')
-        ? Date.now() + options.expire
-        : options.expire;
-    
-    this.loadSession(req, data);
-};
-
-Store.prototype.loadSession = (req, data) => {
-    req.session = {
-        id: req.sessionID,
-        expires: req.sessionExpire,
-        req
-    };
-    
-    if (typeof data === 'object' && data !== null) {
-        for (const prop in data) {
-            if (data.hasOwnProperty(prop) && !(prop in req.session)) {
-                req.session[prop] = data[prop];
-            }
-        }
+class Store extends EventEmitter {
+    constructor () {
+        super();
     }
     
-    return req.session;
-};
+    generateSession (req, options, prevSession) {
+        const session = {
+            id: !prevSession ? uid(24) : prevSession.id,
+            expires: setExpires(options.expires)
+        };
+        
+        if (typeof prevSession === 'object' && prevSession !== null) {
+            for (const prop in prevSession) {
+                if (prevSession.hasOwnProperty(prop) && !(prop in session)) {
+                    session[prop] = prevSession[prop];
+                }
+            }
+        }
+        
+        helpers.setObjProp(req, 'session', session);
+        
+        return req.session;
+    }
+    
+    regenerate (req, options, fn) {
+        this.destroy(req.session.id, (err) => {
+            this.generateSession(req, options);
+            fn(err);
+        });
+    }
+}
 
-Store.prototype.regenerate = (req, options, fn) => {
-    this.destroy(req.sessionID, (err) => {
-        this.generateSession(req, options);
-        fn(err);
-    });
-};
+module.exports = Store;

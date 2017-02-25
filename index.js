@@ -3,41 +3,37 @@
  */
 
 const express = require('express');
-const session = require('express-session');
+//const session = require('express-session');
 const http = require('http');
-//const session = require('./session/session');
-
+const session = require('./session/index');
 
 const app = express();
 
-const sessionParams = {
-    resave: false,
-    rolling: false,
-    name: "dupa",
-    saveUninitialized: true,
-    secret: "dupaaaa",
-    unset: "keep",
-    cookie: {
-        maxAge: 60000,
-        //originalMaxAge: 1800000,
-        httpOnly: true
-    }
-};
+// const sessionParams = {
+//     resave: false,
+//     rolling: false,
+//     name: "dupa",
+//     saveUninitialized: true,
+//     secret: "dupaaaa",
+//     unset: "keep",
+//     cookie: {
+//         maxAge: 60000,
+//         //originalMaxAge: 1800000,
+//         httpOnly: true
+//     }
+// };
 
-/*const sessionParams = {
-    expire: 900000, // false
+const sessionParams = {
+    expires: 900000, // false
     resave: true,
     rolling: false,
     name: "dupa",
-    saveUninitialized: true,
+    saveUninitialized: false,
     secret: "dupaaaa",
-    unset: "keep",
     cookie: {
-        maxAge: false,
-        //originalMaxAge: 1800000,
-        httpOnly: true
+        secure: false
     }
-};*/
+};
 
 app.use(session(sessionParams));
 
@@ -74,7 +70,9 @@ app.get("/kaka", function (req, res, next) {
 app.use(function (err, req, res, next) {
     "use strict";
     
-    res.json({err: err.message});
+    console.log(err);
+    
+    res.json({err: err.stack});
 });
 
 
