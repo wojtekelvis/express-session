@@ -24,8 +24,8 @@ const app = express();
 // };
 
 const sessionParams = {
-    expires: 900000, // false
-    resave: true,
+    expires: false, // false
+    resave: false,
     rolling: false,
     name: "dupa",
     saveUninitialized: false,
@@ -37,23 +37,10 @@ const sessionParams = {
 
 app.use(session(sessionParams));
 
-app.use(function (req, res, next) {
-    "use strict";
-    
-    let reqEnd = res.end;
-    
-    res.end = function (chunk, encoding) {
-        console.log("dupa");
-    
-        reqEnd.call(res, chunk, encoding);
-    };
-    
-    next();
-});
-
 app.get("/", function (req, res, next) {
     "use strict";
     
+    req.session.expires = 60000;
     res.json({view: req.session.view});
 });
 
@@ -71,11 +58,8 @@ app.use(function (err, req, res, next) {
     "use strict";
     
     console.log(err);
-    
     res.json({err: err.stack});
 });
-
-
 
 http.createServer(app)
     .listen(3000)

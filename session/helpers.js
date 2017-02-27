@@ -5,9 +5,47 @@
 const crc = require('crc').crc32;
 const cookie = require('cookie');
 const signature = require('cookie-signature');
+const merge = require('merge');
+const uid = require('uid-safe').sync;
 
-const helpers = {
-    hash: function (sess) {
+class Helpers {
+    merge () {
+        return merge.recursive(true, ...arguments);
+    }
+    
+    getSid () {
+        return uid(24);
+    }
+    
+    setExpires (expires) {
+        return (typeof expires === 'number')
+            ? Date.now() + expires
+            : expires;
+    }
+    
+    isActive (session) {
+        return session.expires
+            ? (session.expires + session.lastActiv) > Date.now()
+            : true;
+    }
+    
+    getSession (sessions, sessionId) {
+        let sess = sessions[sessionId];
+        
+        if (!sess) {
+            return undefined;
+        }
+        
+        try {
+            sess = JSON.parse(sess);
+        } catch (e) {
+            sess = undefined;
+        }
+        
+        return sess;
+    }
+    
+    hash (sess) {
         return crc(JSON.stringify(sess, function (key, val) {
             if (this === sess && key === 'expires') {
                 return;
@@ -15,10 +53,9 @@ const helpers = {
             
             return val;
         }));
-    },
+    }
     
-    setObjProp: function (source, key, value) {
-        "use strict";
+    setObjProp (source, key, value) {
         Object.defineProperty(source, key, {
             configurable: false,
             enumerable: false,
@@ -27,9 +64,9 @@ const helpers = {
         });
         
         return source;
-    },
+    }
     
-    getCookie: function (req, name, secrets) {
+     getCookie (req, name, secrets) {
         const header = req.headers.cookie;
         let val;
         
@@ -47,9 +84,9 @@ const helpers = {
         }
         
         return val;
-    },
+    }
     
-    setCookie: function (res, val, params) {
+    setCookie (res, val, params) {
         const signed = 's:' + signature.sign(val, params.secret);
         const data = cookie.serialize(params.name, signed, params.cookie);
         const prev = res.getHeader('set-cookie') || [];
@@ -58,9 +95,9 @@ const helpers = {
             : [prev, data];
         
         res.setHeader('set-cookie', header);
-    },
+    }
     
-    unSignCookie: function (val, secret) {
+    unSignCookie (val, secret) {
         const result = signature.unsign(val, secret);
         
         if (!result) {
@@ -69,6 +106,6 @@ const helpers = {
         
         return result;
     }
-};
+}
 
-module.exports = helpers;
+module.exports = new Helpers();

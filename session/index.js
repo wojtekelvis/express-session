@@ -2,7 +2,6 @@
  * Created by Wojtek on 2017-02-19.
  */
 
-const merge = require('merge');
 const debug = require('debug')('session');
 const MemoryStore = require('./memory');
 const helpers = require('./helpers');
@@ -25,7 +24,7 @@ function session (options) {
         saveUninitialized: false,
         secret: null
     };
-    const opts = merge.recursive(true, def, options || {});
+    const opts = helpers.merge(def, options || {});
     
     if (!opts.store) {
         opts.store = new MemoryStore();
@@ -39,9 +38,7 @@ function session (options) {
     
     const storeImplementsTouch = typeof store.touch === 'function';
     let storeReady = true;
-    let originalId; /* value of session ID after loaded from store or generated */
     let originalHash; /* value of crc of session object after loaded from store */
-    let savedHash; /* value of crc of session object after saved or same as originalHash when resave == false */
     let currentHash;
     
     store
@@ -56,20 +53,28 @@ function session (options) {
         /* cookieID -> value of the loaded from session cookie ID */
         const cookieId = helpers.getCookie(req, opts.name, opts.secret);
         
-        function generate (sess) {
-            store.generateSession(req, opts, sess);
-            originalId = req.session.id;
+        function setOrigin() {
             originalHash = helpers.hash(req.session);
+    
+            /* avoid saving session on END handler */
+            if (!opts.resave) {
+                currentHash = originalHash;
+            }
+        }
+        
+        function generate (sess) {
+            store.generateSession(req, opts.expires, sess);
+            setOrigin();
             
-            return originalId;
+            return req.session.id;
         }
     
         function isModified () {
-            return originalId !== req.session.id || originalHash !== currentHash;
+            return cookieId !== req.session.id || originalHash !== currentHash;
         }
     
         function isSaved () {
-            return originalId === req.session.id && savedHash === currentHash;
+            return cookieId === req.session.id && originalHash === currentHash;
         }
     
         function shouldSave () {
@@ -79,7 +84,7 @@ function session (options) {
         }
     
         function shouldTouch() {
-            return cookieId === req.session.id;
+            return cookieId === req.session.id && req.session.expires;
         }
     
         function shouldSetCookie () {
@@ -142,12 +147,22 @@ function session (options) {
                     return next(err);
                 }
     
-                generate(sess || { id: cookieId });
-    
-                /* avoid saving session on END handler */
-                if (!opts.resave) {
-                    savedHash = originalHash
+                /* check if session is expired, then change session ID */
+                if (sess) {
+                    if (helpers.isActive(sess)) {
+                        generate(sess);
+                        
+                        return next();
+                    } else {
+                        return store.regenerateSession(req, opts.expires, function onRegenerate () {
+                            setOrigin();
+        
+                            return next();
+                        });
+                    }
                 }
+          
+                generate({ id: cookieId });
                 
                 return next();
             });

@@ -3,45 +3,49 @@
  */
 
 const EventEmitter = require('events').EventEmitter;
-const uid = require('uid-safe').sync;
 const helpers = require('./helpers');
-
-function setExpires (expires) {
-    "use strict";
-    return (typeof expires === 'number')
-        ? Date.now() + expires
-        : expires;
-}
 
 class Store extends EventEmitter {
     constructor () {
         super();
     }
     
-    generateSession (req, options, prevSession) {
-        const session = {
-            id: !prevSession ? uid(24) : prevSession.id,
-            expires: setExpires(options.expires)
-        };
+    generateSession (req, expires, prevSession) {
+        if (!req.session) {
+            helpers.setObjProp(req, 'session', {});
+        }
+    
+        req.session.id = !prevSession ? helpers.getSid() : prevSession.id;
+        req.session.lastActiv = Date.now();
+        req.session.expires = expires;
         
         if (typeof prevSession === 'object' && prevSession !== null) {
             for (const prop in prevSession) {
-                if (prevSession.hasOwnProperty(prop) && !(prop in session)) {
-                    session[prop] = prevSession[prop];
+                if (prevSession.hasOwnProperty(prop) && !(prop in req.session)) {
+                    req.session[prop] = prevSession[prop];
                 }
             }
         }
         
-        helpers.setObjProp(req, 'session', session);
-        
         return req.session;
     }
     
-    regenerate (req, options, fn) {
-        this.destroy(req.session.id, (err) => {
-            this.generateSession(req, options);
-            fn(err);
-        });
+    regenerateSession (req, expires, fn) {
+        if (req.session) {
+            return this.destroy(req.session.id, (err) => {
+                for (let prop in req.session) {
+                    if (req.session.hasOwnProperty(prop)) {
+                        delete req.session[prop];
+                    }
+                }
+        
+                this.generateSession(req, expires);
+                return fn(err);
+            });
+        } else {
+            this.generateSession(req, expires);
+            return fn(null);
+        }
     }
 }
 

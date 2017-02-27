@@ -3,50 +3,41 @@
  */
 
 const Store = require('./store');
-
-function getSession (sessionId) {
-    let sess = this.sessions[sessionId];
-    
-    if (!sess) {
-        return false;
-    }
-    
-    sess = JSON.parse(sess);
-    
-    /* remove expired session */
-    if (sess.expires <= Date.now()) {
-        delete this.sessions[sessionId];
-        return false;
-    }
-    
-    return sess;
-}
+const helpers = require('./helpers');
 
 class MemoryStore extends Store {
     constructor () {
         super();
         this.sessions = Object.create(null);
+        
+        /* compaction */
+        setInterval(() => {
+            this.allInactive((err, sessions) => {
+                console.log('compacting ', sessions);
+                for (const elem in sessions) {
+                    if (sessions.hasOwnProperty(elem)) {
+                        this.sessions[sessions[elem]] = null;
+                        delete this.sessions[sessions[elem]];
+                    }
+                }
+            });
+        }, 60000);
     }
     
-    all (callback) {
+    allInactive (callback) {
         const sessionIds = Object.keys(this.sessions);
-        const sessions = null;
+        const sessions = [];
         
         for (let i = 0; i < sessionIds.length; i++) {
             const sessionId = sessionIds[i];
-            const session = getSession.call(this, sessionId);
+            const session = helpers.getSession(this.sessions, sessionId);
             
-            if (session) {
-                sessions[sessionId] = session;
+            if (session && !helpers.isActive(session)) {
+                sessions.push(sessionId);
             }
         }
         
         callback && setImmediate(callback, null, sessions);
-    }
-    
-    clear (callback) {
-        this.sessions = null;
-        callback && setImmediate(callback)
     }
     
     destroy (sessionId, callback) {
@@ -55,7 +46,7 @@ class MemoryStore extends Store {
     }
     
     get (sessionId, callback) {
-        const sess = getSession.call(this, sessionId);
+        const sess = helpers.getSession(this.sessions, sessionId);
         setImmediate(callback, null, sess);
     }
     
@@ -64,22 +55,12 @@ class MemoryStore extends Store {
         callback && setImmediate(callback);
     }
     
-    length (callback) {
-        this.all((err, sessions) => {
-            if (err) {
-                return callback(err);
-            }
-            
-            callback(null, Object.keys(sessions).length);
-        });
-    }
-    
     touch (sessionId, expires, callback) {
-        const currentSession = getSession.call(this, sessionId);
+        const currentSession = helpers.getSession(this.sessions, sessionId);
         
-        if (currentSession && expires) {
+        if (currentSession) {
             // update expiration
-            currentSession.expires = expires;
+            currentSession.expires = helpers.setExpires(expires);
             this.sessions[sessionId] = JSON.stringify(currentSession);
         }
         
