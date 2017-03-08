@@ -1,5 +1,5 @@
 /**
- * Created by xwjr78 on 07.03.2017.
+ * Created by Wojtek on 2017-03-02.
  */
 
 const debug = require('debug')('session');
@@ -12,45 +12,45 @@ class RedisStore extends Store {
         super();
         this.sessions = Object.create(null);
 
-        this.client = redis.createClient({
+        const client = this.client = redis.createClient({
             host: config.host,
-            port: config.port
-        });
-
-        this.client.on('error', function (err) {
-            debug("Redis error:", err);
-        });
-
-        /* compaction */
-        setInterval(() => {
-            this.allInactive((err, sessions) => {
-                console.log('compacting ', sessions);
-                for (const elem in sessions) {
-                    if (sessions.hasOwnProperty(elem)) {
-                        this.sessions[sessions[elem]] = null;
-                        delete this.sessions[sessions[elem]];
-                    }
+            port: config.port,
+            retry_strategy: function (options) {
+                if (options.error && options.error.code === 'ECONNREFUSED') {
+                    // End reconnecting on a specific error and flush all commands with a individual error
+                    return new Error('The server refused the connection');
                 }
-            });
-        }, 60000);
-    }
-
-    allInactive (callback) {
-        const sessionIds = Object.keys(this.sessions);
-        const sessions = [];
-
-        for (let i = 0; i < sessionIds.length; i++) {
-            const sessionId = sessionIds[i];
-            const session = helpers.getSession(this.sessions, sessionId);
-
-            if (session && !helpers.isActive(session)) {
-                sessions.push(sessionId);
+                if (options.total_retry_time > 1000 * 60) {
+                    // End reconnecting after a specific timeout and flush all commands with a individual error
+                    return new Error('Retry time exhausted');
+                }
+                if (options.times_connected > 100) {
+                    // End reconnecting with built in error
+                    return undefined;
+                }
+                // reconnect after
+                return Math.min(options.attempt * 100, 3000);
             }
-        }
+        });
 
-        callback && setImmediate(callback, null, sessions);
+        client.on('error', (err) => {
+            debug("Redis error:", err);
+            this.emit('disconnect');
+        });
+        
+        client.on('connect', () => {
+            this.emit('connect');
+        });
+    
+        client.on('reconnecting', () => {
+            this.emit('disconnect');
+        });
+    
+        client.on('end', () => {
+            this.emit('disconnect');
+        });
     }
-
+    
     destroy (sessionId, callback) {
         delete this.sessions[sessionId];
         callback && setImmediate(callback);

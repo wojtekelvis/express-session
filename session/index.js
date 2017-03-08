@@ -187,13 +187,7 @@ function session (options) {
         }
 
         debug('missing session ID from cookie');
-        /* missing session ID from browser req */
-        let sessionID = generate();
-        
-        if (shouldSetCookie()) {
-            /* set cookie here to allow application consume it before END handler */
-            helpers.setCookie(res, sessionID, opts);
-        }
+        generate();
     
         return next();
     };
