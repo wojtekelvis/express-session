@@ -2,8 +2,9 @@
  * Created by Wojtek on 2017-02-19.
  */
 
-const Store = require('./store');
-const helpers = require('./helpers');
+const debug = require('debug')('session');
+const Store = require('./../store');
+const helpers = require('./../helpers');
 
 class MemoryStore extends Store {
     constructor () {
@@ -55,12 +56,12 @@ class MemoryStore extends Store {
         callback && setImmediate(callback);
     }
     
-    touch (sessionId, expires, callback) {
+    touch (sessionId, callback) {
         const currentSession = helpers.getSession(this.sessions, sessionId);
         
-        if (currentSession) {
-            // update expiration
-            currentSession.expires = helpers.setExpires(expires);
+        if (currentSession && helpers.isActive(currentSession)) {
+            // update session activity
+            currentSession.lastActiv = Date.now();
             this.sessions[sessionId] = JSON.stringify(currentSession);
         }
         

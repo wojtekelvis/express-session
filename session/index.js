@@ -3,8 +3,13 @@
  */
 
 const debug = require('debug')('session');
-const MemoryStore = require('./memory');
+const MemoryStore = require('./store/memory');
 const helpers = require('./helpers');
+
+function getStore (opts) {
+    const Store = require('./store/' + opts.store);
+    return new Store(opts.storeConfig);
+}
 
 function session (options) {
     "use strict";
@@ -22,12 +27,20 @@ function session (options) {
         resave: false,
         rolling: false,
         saveUninitialized: false,
-        secret: null
+        secret: null,
+        store: "memory",
+        storeConfig: {
+            host: "localhost",
+            port: "6379"
+        }
     };
     const opts = helpers.merge(def, options || {});
     
     if (!opts.store) {
+        debug('Using default store as MemoryStore');
         opts.store = new MemoryStore();
+    } else {
+        opts.store = getStore(opts);
     }
     
     const store = opts.store;
@@ -118,6 +131,7 @@ function session (options) {
             
             /* something really wrong happened */
             if (!req.session || !req.session.id) {
+                debug('missing session property inside req');
                 return setResponse(true);
             }
             
@@ -130,12 +144,14 @@ function session (options) {
                         return setResponse();
                     });
                 } else if (storeImplementsTouch && shouldTouch()) {
-                    return store.touch(req.session.id, opts.expires, function onTouch () {
+                    return store.touch(req.session.id, function onTouch () {
                         
                         return setResponse();
                     });
                 }
             }
+
+            debug('session ID in wrong format');
     
             return setResponse();
         };
@@ -154,6 +170,7 @@ function session (options) {
                         
                         return next();
                     } else {
+                        debug('session ID from cookie was found but is already expired');
                         return store.regenerateSession(req, opts.expires, function onRegenerate () {
                             setOrigin();
         
@@ -161,13 +178,15 @@ function session (options) {
                         });
                     }
                 }
-          
+
+                debug('session ID from cookie was not found in store');
                 generate({ id: cookieId });
                 
                 return next();
             });
         }
-    
+
+        debug('missing session ID from cookie');
         /* missing session ID from browser req */
         let sessionID = generate();
         

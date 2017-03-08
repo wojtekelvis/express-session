@@ -39,7 +39,8 @@ app.use(session(sessionParams));
 
 app.get("/", function (req, res, next) {
     "use strict";
-    
+
+    console.log(req.session.expires);
     req.session.expires = 60000;
     res.json({view: req.session.view});
 });
@@ -62,12 +63,12 @@ app.use(function (err, req, res, next) {
 });
 
 http.createServer(app)
-    .listen(3000)
+    .listen(3003)
     .on('error', function (err) {
         "use strict";
         console.log(err);
     })
     .on('listening', function () {
         "use strict";
-        console.log("on port 3000");
+        console.log("on port 3003");
     });

@@ -2,6 +2,7 @@
  * Created by Wojtek on 2017-02-24.
  */
 
+const debug = require('debug')('session');
 const crc = require('crc').crc32;
 const cookie = require('cookie');
 const signature = require('cookie-signature');
@@ -15,12 +16,6 @@ class Helpers {
     
     getSid () {
         return uid(24);
-    }
-    
-    setExpires (expires) {
-        return (typeof expires === 'number')
-            ? Date.now() + expires
-            : expires;
     }
     
     isActive (session) {
@@ -76,7 +71,7 @@ class Helpers {
             
             if (raw && raw.substr(0, 2) === 's:') {
                 val = this.unSignCookie(raw.slice(2), secrets);
-                
+
                 if (val === false) {
                     val = undefined;
                 }
@@ -96,14 +91,14 @@ class Helpers {
         
         res.setHeader('set-cookie', header);
     }
-    
+
     unSignCookie (val, secret) {
         const result = signature.unsign(val, secret);
-        
+
         if (!result) {
             return false;
         }
-        
+
         return result;
     }
 }

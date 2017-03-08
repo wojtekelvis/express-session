@@ -2,6 +2,7 @@
  * Created by Wojtek on 2017-02-19.
  */
 
+const debug = require('debug')('session');
 const EventEmitter = require('events').EventEmitter;
 const helpers = require('./helpers');
 
