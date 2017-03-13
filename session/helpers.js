@@ -24,7 +24,16 @@ class Helpers {
             : true;
     }
     
+    setExpire (def, sess) {
+        if (sess && (sess.expires === false || !Number.isNaN(Number.parseInt(sess.expires, 10)))) {
+            return sess.expires;
+        }
+        return def
+    }
+    
     getSession (sessions, sessionId) {
+        debug("getSession: " + sessionId);
+        
         let sess = sessions[sessionId];
         
         if (!sess) {
@@ -42,7 +51,7 @@ class Helpers {
     
     hash (sess) {
         return crc(JSON.stringify(sess, function (key, val) {
-            if (this === sess && key === 'expires') {
+            if (this === sess && key === 'lastActiv') {
                 return;
             }
             

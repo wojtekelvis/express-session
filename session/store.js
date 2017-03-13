@@ -12,13 +12,15 @@ class Store extends EventEmitter {
     }
     
     generateSession (req, expires, prevSession) {
+        debug("Generating session with expires: " + expires);
+        
         if (!req.session) {
             helpers.setObjProp(req, 'session', {});
         }
     
         req.session.id = !prevSession ? helpers.getSid() : prevSession.id;
         req.session.lastActiv = Date.now();
-        req.session.expires = expires;
+        req.session.expires = helpers.setExpire(expires, prevSession);
         
         if (typeof prevSession === 'object' && prevSession !== null) {
             for (const prop in prevSession) {
@@ -32,6 +34,7 @@ class Store extends EventEmitter {
     }
     
     regenerateSession (req, expires, fn) {
+        debug("Regenerating session with expires: " + expires);
         if (req.session) {
             return this.destroy(req.session.id, (err) => {
                 for (let prop in req.session) {

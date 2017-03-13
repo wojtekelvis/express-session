@@ -53,18 +53,22 @@ function session (options) {
     let storeReady = true;
     let originalHash; /* value of crc of session object after loaded from store */
     let currentHash;
+    let cookieId;
+    let sessionId;
     
     store
         .on('disconnect', function onDisconnect() {
+            debug('disconnected from store');
             storeReady = false
         })
         .on('connect', function onConnect() {
+            debug('connected to store');
             storeReady = true
         });
     
     return function session (req, res, next) {
         /* cookieID -> value of the loaded from session cookie ID */
-        const cookieId = helpers.getCookie(req, opts.name, opts.secret);
+        cookieId = helpers.getCookie(req, opts.name, opts.secret);
         
         function setOrigin() {
             originalHash = helpers.hash(req.session);
@@ -87,7 +91,9 @@ function session (options) {
         }
     
         function isSaved () {
-            return cookieId === req.session.id && originalHash === currentHash;
+            return cookieId === sessionId
+                && cookieId === req.session.id
+                && originalHash === currentHash;
         }
     
         function shouldSave () {
@@ -111,7 +117,7 @@ function session (options) {
         }
     
         if (!storeReady) {
-            debug('store is disconnected');
+            debug('Store is disconnected...');
             return next();
         }
     
@@ -125,30 +131,42 @@ function session (options) {
                 if (!withoutCookie && shouldSetCookie()) {
                     helpers.setCookie(res, req.session.id, opts);
                 }
+    
+                debug('end.');
                 
                 return _end.call(res, chunk, encoding);
             }
             
             /* something really wrong happened */
             if (!req.session || !req.session.id) {
-                debug('missing session property inside req');
+                debug('Missing session property inside req');
                 return setResponse(true);
             }
             
             if (typeof req.session.id === 'string') {
-                currentHash = helpers.hash(req.session);
+                currentHash = currentHash || helpers.hash(req.session);
                 
                 if (shouldSave()) {
-                    return store.set(req.session.id, req.session, function onSave () {
+                    return store.set(req.session.id, req.session, function onSave (err) {
+                        if (err && err.code !== 'ENOENT') {
+                            return next(err);
+                        }
                         
                         return setResponse();
                     });
                 } else if (storeImplementsTouch && shouldTouch()) {
-                    return store.touch(req.session.id, function onTouch () {
+                    return store.touch(req.session.id, function onTouch (err) {
+                        if (err && err.code !== 'ENOENT') {
+                            return next(err);
+                        }
                         
                         return setResponse();
                     });
                 }
+    
+                debug('Exit without saving');
+    
+                return setResponse();
             }
 
             debug('session ID in wrong format');
@@ -158,6 +176,8 @@ function session (options) {
         /* END - PROXY END HANDLER */
         
         if (cookieId) {
+            debug('Found cookie ID');
+            
             return store.get(cookieId, function getSession (err, sess) {
                 if (err && err.code !== 'ENOENT') {
                     return next(err);
@@ -165,13 +185,16 @@ function session (options) {
     
                 /* check if session is expired, then change session ID */
                 if (sess) {
+                    debug('Found session');
+                    
                     if (helpers.isActive(sess)) {
+                        sessionId = sess.id;
                         generate(sess);
                         
                         return next();
                     } else {
-                        debug('session ID from cookie was found but is already expired');
-                        return store.regenerateSession(req, opts.expires, function onRegenerate () {
+                        debug('Session ID was found but is already expired');
+                        return store.regenerateSession(req, sess.expires, function onRegenerate () {
                             setOrigin();
         
                             return next();
@@ -179,14 +202,14 @@ function session (options) {
                     }
                 }
 
-                debug('session ID from cookie was not found in store');
+                debug('Session ID was not found in store');
                 generate({ id: cookieId });
                 
                 return next();
             });
         }
 
-        debug('missing session ID from cookie');
+        debug('Missing session ID from cookie');
         generate();
     
         return next();

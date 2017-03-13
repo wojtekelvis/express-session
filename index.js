@@ -3,26 +3,10 @@
  */
 
 const express = require('express');
-//const session = require('express-session');
 const http = require('http');
 const session = require('./session/index');
 
 const app = express();
-
-// const sessionParams = {
-//     resave: false,
-//     rolling: false,
-//     name: "dupa",
-//     saveUninitialized: true,
-//     secret: "dupaaaa",
-//     unset: "keep",
-//     cookie: {
-//         maxAge: 60000,
-//         //originalMaxAge: 1800000,
-//         httpOnly: true
-//     }
-// };
-
 const sessionParams = {
     expires: false, // false
     resave: false,
@@ -30,6 +14,7 @@ const sessionParams = {
     name: "dupa",
     saveUninitialized: false,
     secret: "dupaaaa",
+    store: "redis",
     cookie: {
         secure: false
     }
@@ -40,8 +25,8 @@ app.use(session(sessionParams));
 app.get("/", function (req, res, next) {
     "use strict";
 
-    console.log(req.session.expires);
-    req.session.expires = 60000;
+    //console.log(req.session.expires);
+    //req.session.expires = 60000;
     res.json({view: req.session.view});
 });
 

@@ -11,11 +11,13 @@ class RedisStore extends Store {
     constructor (config) {
         super();
         this.sessions = Object.create(null);
+        this.prefix = "sessionID:";
 
         const client = this.client = redis.createClient({
             host: config.host,
             port: config.port,
             retry_strategy: function (options) {
+                debug("Store Redis settings:", options);
                 if (options.error && options.error.code === 'ECONNREFUSED') {
                     // End reconnecting on a specific error and flush all commands with a individual error
                     return new Error('The server refused the connection');
@@ -34,48 +36,71 @@ class RedisStore extends Store {
         });
 
         client.on('error', (err) => {
-            debug("Redis error:", err);
+            debug("Store Redis error:", err);
             this.emit('disconnect');
         });
         
         client.on('connect', () => {
+            debug("Store Redis connected");
             this.emit('connect');
         });
     
         client.on('reconnecting', () => {
+            debug("Store Redis reconnecting");
             this.emit('disconnect');
         });
     
-        client.on('end', () => {
+        client.on('end', (err) => {
+            debug("Store Redis disconnecting ", err);
             this.emit('disconnect');
         });
     }
     
     destroy (sessionId, callback) {
-        delete this.sessions[sessionId];
+        debug("Store Redis destroy session: " + sessionId);
+        
+        
         callback && setImmediate(callback);
     }
 
     get (sessionId, callback) {
-        const sess = helpers.getSession(this.sessions, sessionId);
-        setImmediate(callback, null, sess);
+        debug("Store Redis get session: " + sessionId);
+        
+        this.client.get(this.prefix + sessionId, (err, reply) => {
+            callback && setImmediate(callback, err, reply && JSON.parse(reply));
+        });
     }
 
     set (sessionId, session, callback) {
-        this.sessions[sessionId] = JSON.stringify(session);
-        callback && setImmediate(callback);
+        debug("Store Redis set session: " + sessionId, session);
+        session.lastActiv = Date.now();
+        
+        const sess = JSON.stringify(session);
+        const setCallback = (err, reply) => {
+            callback && setImmediate(callback, err, reply);
+        };
+        
+        if (session.expires) {
+            return this.client.psetex(this.prefix + sessionId, session.expires, sess, setCallback);
+        }
+    
+        this.client.set(this.prefix + sessionId, sess, setCallback);
     }
 
     touch (sessionId, callback) {
-        const currentSession = helpers.getSession(this.sessions, sessionId);
+        debug("Store Redis touch session: " + sessionId);
 
-        if (currentSession && helpers.isActive(currentSession)) {
-            // update session activity
-            currentSession.lastActiv = Date.now();
-            this.sessions[sessionId] = JSON.stringify(currentSession);
-        }
-
-        callback && setImmediate(callback);
+        this.get(sessionId, (err, session) => {
+            if (err) {
+                return callback && callback(err);
+            }
+            
+            if (session) {
+                this.set(sessionId, session, (err, reply) => {
+                    callback && callback(err, reply);
+                });
+            }
+        });
     }
 }
 

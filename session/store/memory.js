@@ -14,7 +14,7 @@ class MemoryStore extends Store {
         /* compaction */
         setInterval(() => {
             this.allInactive((err, sessions) => {
-                console.log('compacting ', sessions);
+                debug('Store memory: compacting ', sessions);
                 for (const elem in sessions) {
                     if (sessions.hasOwnProperty(elem)) {
                         this.sessions[sessions[elem]] = null;
@@ -42,21 +42,26 @@ class MemoryStore extends Store {
     }
     
     destroy (sessionId, callback) {
+        debug('Store memory: destroy ' + sessionId);
         delete this.sessions[sessionId];
         callback && setImmediate(callback);
     }
     
     get (sessionId, callback) {
+        debug('Store memory: get ' + sessionId);
         const sess = helpers.getSession(this.sessions, sessionId);
         setImmediate(callback, null, sess);
     }
     
     set (sessionId, session, callback) {
+        debug('Store memory: set ' + sessionId, session);
         this.sessions[sessionId] = JSON.stringify(session);
         callback && setImmediate(callback);
     }
     
     touch (sessionId, callback) {
+        debug('Store memory: touch ' + sessionId);
+        
         const currentSession = helpers.getSession(this.sessions, sessionId);
         
         if (currentSession && helpers.isActive(currentSession)) {
