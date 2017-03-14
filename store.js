@@ -7,12 +7,13 @@ const EventEmitter = require('events').EventEmitter;
 const helpers = require('./helpers');
 
 class Store extends EventEmitter {
-    constructor () {
+    constructor (expiration) {
         super();
+        this.defaultExpiration = expiration;
     }
     
-    generateSession (req, expires, prevSession) {
-        debug("Generating session with expires: " + expires);
+    generate (req, prevSession) {
+        debug("Generating session with expires");
         
         if (!req.session) {
             helpers.setObjProp(req, 'session', {});
@@ -20,7 +21,7 @@ class Store extends EventEmitter {
     
         req.session.id = !prevSession ? helpers.getSid() : prevSession.id;
         req.session.lastActiv = Date.now();
-        req.session.expires = helpers.setExpire(expires, prevSession);
+        req.session.expires = helpers.setExpire(this.defaultExpiration, prevSession);
         
         if (typeof prevSession === 'object' && prevSession !== null) {
             for (const prop in prevSession) {
@@ -33,8 +34,9 @@ class Store extends EventEmitter {
         return req.session;
     }
     
-    regenerateSession (req, expires, fn) {
-        debug("Regenerating session with expires: " + expires);
+    regenerate (req, fn) {
+        debug("Regenerating session");
+
         if (req.session) {
             return this.destroy(req.session.id, (err) => {
                 for (let prop in req.session) {
@@ -43,11 +45,11 @@ class Store extends EventEmitter {
                     }
                 }
         
-                this.generateSession(req, expires);
+                this.generate(req);
                 return fn(err);
             });
         } else {
-            this.generateSession(req, expires);
+            this.generate(req);
             return fn(null);
         }
     }

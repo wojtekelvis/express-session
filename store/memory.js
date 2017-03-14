@@ -7,8 +7,8 @@ const Store = require('./../store');
 const helpers = require('./../helpers');
 
 class MemoryStore extends Store {
-    constructor () {
-        super();
+    constructor (config, expiration) {
+        super(expiration);
         this.sessions = Object.create(null);
         
         /* compaction */

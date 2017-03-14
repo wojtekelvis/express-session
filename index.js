@@ -8,14 +8,14 @@ const helpers = require('./helpers');
 
 function getStore (opts) {
     const Store = require('./store/' + opts.store);
-    return new Store(opts.storeConfig);
+    return new Store(opts.storeConfig, opts.defaultExpiration);
 }
 
 function session (options) {
     "use strict";
     
     const def = {
-        expires: false,
+        defaultExpiration: 900000,
         cookie: {
             path: "/",
             maxAge: null,
@@ -80,7 +80,7 @@ function session (options) {
         }
         
         function generate (sess) {
-            store.generateSession(req, opts.expires, sess);
+            store.generate(req, sess);
             setOrigin();
             
             return req.session.id;
@@ -194,7 +194,7 @@ function session (options) {
                         return next();
                     } else {
                         debug('Session ID was found but is already expired');
-                        return store.regenerateSession(req, sess.expires, function onRegenerate () {
+                        return store.regenerate(req, sess.expires, function onRegenerate () {
                             setOrigin();
         
                             return next();

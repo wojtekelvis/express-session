@@ -8,14 +8,12 @@ const Store = require('./../store');
 const helpers = require('./../helpers');
 
 class RedisStore extends Store {
-    constructor (config) {
-        super();
+    constructor (config, expiration) {
+        super(expiration);
         this.sessions = Object.create(null);
         this.prefix = "sessionID:";
 
-        const client = this.client = redis.createClient({
-            host: config.host,
-            port: config.port,
+        const redisSettings = helpers.merge({
             retry_strategy: function (options) {
                 debug("Store Redis settings:", options);
                 if (options.error && options.error.code === 'ECONNREFUSED') {
@@ -33,7 +31,9 @@ class RedisStore extends Store {
                 // reconnect after
                 return Math.min(options.attempt * 100, 3000);
             }
-        });
+        }, config);
+
+        const client = this.client = redis.createClient(redisSettings);
 
         client.on('error', (err) => {
             debug("Store Redis error:", err);
@@ -58,9 +58,10 @@ class RedisStore extends Store {
     
     destroy (sessionId, callback) {
         debug("Store Redis destroy session: " + sessionId);
-        
-        
-        callback && setImmediate(callback);
+
+        this.client.del(this.prefix + sessionId, (err) => {
+            callback && setImmediate(callback, err);
+        });
     }
 
     get (sessionId, callback) {
