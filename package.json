@@ -1,5 +1,9 @@
 {
   "name": "msess",
+  "author": {
+    "name": "Wojtek Kaminski",
+    "email": "kaminski.wojtek@gmail.com"
+  },
   "version": "0.0.1",
   "dependencies": {
     "cookie": "^0.3.1",
