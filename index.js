@@ -52,6 +52,7 @@ function session (options) {
     const storeImplementsTouch = typeof store.touch === 'function';
     let storeReady = true;
     let originalHash; /* value of crc of session object after loaded from store */
+    let savedHash;
     let currentHash;
     let cookieId;
     let sessionId;
@@ -75,7 +76,7 @@ function session (options) {
     
             /* avoid saving session on END handler */
             if (!opts.resave) {
-                currentHash = originalHash;
+                savedHash = originalHash;
             }
         }
         
@@ -93,7 +94,7 @@ function session (options) {
         function isSaved () {
             return cookieId === sessionId
                 && cookieId === req.session.id
-                && originalHash === currentHash;
+                && savedHash === currentHash;
         }
     
         function shouldSave () {
@@ -144,7 +145,7 @@ function session (options) {
             }
             
             if (typeof req.session.id === 'string') {
-                currentHash = currentHash || helpers.hash(req.session);
+                currentHash = helpers.hash(req.session);
                 
                 if (shouldSave()) {
                     return store.set(req.session.id, req.session, function onSave (err) {
@@ -155,7 +156,7 @@ function session (options) {
                         return setResponse();
                     });
                 } else if (storeImplementsTouch && shouldTouch()) {
-                    return store.touch(req.session.id, function onTouch (err) {
+                    return store.touch(req.session.id, req.session, function onTouch (err) {
                         if (err && err.code !== 'ENOENT') {
                             return next(err);
                         }
@@ -186,25 +187,14 @@ function session (options) {
                 /* check if session is expired, then change session ID */
                 if (sess) {
                     debug('Found session');
-                    
-                    if (helpers.isActive(sess)) {
-                        sessionId = sess.id;
-                        generate(sess);
-                        
-                        return next();
-                    } else {
-                        debug('Session ID was found but is already expired');
-                        return store.regenerate(req, sess.expires, function onRegenerate () {
-                            setOrigin();
-        
-                            return next();
-                        });
-                    }
+
+                    sessionId = sess.id;
+                    generate(sess);
+                } else {
+                    debug('Session ID was not found in store');
+                    generate({ id: cookieId });
                 }
 
-                debug('Session ID was not found in store');
-                generate({ id: cookieId });
-                
                 return next();
             });
         }

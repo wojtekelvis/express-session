@@ -88,19 +88,11 @@ class RedisStore extends Store {
         this.client.set(this.prefix + sessionId, sess, setCallback);
     }
 
-    touch (sessionId, callback) {
+    touch (sessionId, session, callback) {
         debug("Store Redis touch session: " + sessionId);
 
-        this.get(sessionId, (err, session) => {
-            if (err) {
-                return callback && callback(err);
-            }
-            
-            if (session) {
-                this.set(sessionId, session, (err, reply) => {
-                    callback && callback(err, reply);
-                });
-            }
+        this.client.pexpire(sessionId, session.expires, (err, reply) => {
+            callback && setImmediate(callback, err, reply);
         });
     }
 }

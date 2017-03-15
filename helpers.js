@@ -17,36 +17,13 @@ class Helpers {
     getSid () {
         return uid(24);
     }
-    
-    isActive (session) {
-        return session.expires
-            ? (session.expires + session.lastActiv) > Date.now()
-            : true;
-    }
+
     
     setExpire (def, sess) {
         if (sess && (sess.expires === false || !Number.isNaN(Number.parseInt(sess.expires, 10)))) {
             return sess.expires;
         }
         return def
-    }
-    
-    getSession (sessions, sessionId) {
-        debug("getSession: " + sessionId);
-        
-        let sess = sessions[sessionId];
-        
-        if (!sess) {
-            return undefined;
-        }
-        
-        try {
-            sess = JSON.parse(sess);
-        } catch (e) {
-            sess = undefined;
-        }
-        
-        return sess;
     }
     
     hash (sess) {
