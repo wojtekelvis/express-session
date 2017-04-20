@@ -91,7 +91,7 @@ class RedisStore extends Store {
     touch (sessionId, session, callback) {
         debug("Store Redis touch session: " + sessionId);
 
-        this.client.pexpire(sessionId, session.expires, (err, reply) => {
+        this.client.pexpire(this.prefix + sessionId, session.expires, (err, reply) => {
             callback && setImmediate(callback, err, reply);
         });
     }
