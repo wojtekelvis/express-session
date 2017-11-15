@@ -29,6 +29,7 @@ function session (options) {
         saveUninitialized: false,
         secret: null,
         store: "memory",
+        throwWhenStoreNotReady: true,
         storeConfig: {
             host: "localhost",
             port: "6379"
@@ -119,6 +120,11 @@ function session (options) {
     
         if (!storeReady) {
             debug('Store is disconnected...');
+
+            if (opts.throwWhenStoreNotReady) {
+              return next(new Error('Session error'));
+            }
+
             return next();
         }
     
