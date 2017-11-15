@@ -1,7 +1,7 @@
 {
   "name": "msess",
   "author": "Wojtek Kaminski <kaminski.wojtek@gmail.com>",
-  "version": "0.0.5",
+  "version": "0.0.6",
   "dependencies": {
     "cookie": "^0.3.1",
     "cookie-signature": "^1.0.6",
